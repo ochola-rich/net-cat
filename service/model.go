@@ -5,6 +5,8 @@ import (
 	"sync"
 )
 
+const DefaultPort = "8989"
+
 type Client struct {
 	Conn     net.Conn
 	Name     string
