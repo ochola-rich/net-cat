@@ -2,7 +2,7 @@ package service
 
 import (
 	"bufio"
-	"net"
+	"strings"
 )
 
 func (c *Client)WriteOutput(){
@@ -11,10 +11,11 @@ func (c *Client)WriteOutput(){
 	}
 }
 
-func (c *Client)ReadeInput(s *Server){
+func (c *Client)ReadInput(s *Server){
  scanner := bufio.NewScanner(c.Conn)
  for scanner.Scan(){
 	msg := scanner.Text()
+	msg = strings.TrimSpace(msg)
 	if msg == ""{
 		continue
 	}
@@ -23,11 +24,11 @@ func (c *Client)ReadeInput(s *Server){
  s.Leave <- c
 }
 
-func NewServer() *Server {
-    return &Server{
-        Clients:   make(map[net.Conn]*Client),
-        Broadcast: make(chan string, 100),
-        Join:      make(chan *Client, 100),
-        Leave:     make(chan *Client, 100),
-    }
-}
+// func NewServer() *Server {
+//     return &Server{
+//         Clients:   make(map[net.Conn]*Client),
+//         Broadcast: make(chan string, 100),
+//         Join:      make(chan *Client, 100),
+//         Leave:     make(chan *Client, 100),
+//     }
+// }

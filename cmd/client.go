@@ -17,14 +17,15 @@ func HandleClient(c net.Conn, s *service.Server) {
 	name, _ := reader.ReadString('\n')
 	name = strings.Trim(name, "\n")
 
-	if name == "" {
+	if strings.TrimSpace(name) == "" {
 		c.Write([]byte("Invalid input, use a valid name"))
 	}
 	client.Name = name
-	s.Clients[c] = client
+	s.Join <- client
+	//s.Clients[c] = client
 
 	go client.WriteOutput()
-	go client.ReadeInput(s)
+	go client.ReadInput(s)
 
 }
 
