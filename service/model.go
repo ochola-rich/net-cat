@@ -12,7 +12,7 @@ type Client struct {
 }
 
 type Server struct {
-	Client    map[net.Conn]*Client
+	Clients   map[net.Conn]*Client
 	Broadcast chan string
 	Join      chan *Client
 	Leave     chan *Client
