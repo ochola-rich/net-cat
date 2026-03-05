@@ -2,104 +2,74 @@ package internal
 
 import (
 	"fmt"
-	"strings"
-	"sync"
-	"time"
 	"net"
+	"net-cat/service"
+	"strings"
+	"time"
 )
 
-// Client represents a connected user (logic-only, no TCP here)
-type Client struct {
-	Conn 	 net.Conn
-	Name     string
-	Messages chan string // outbound messages to this client
+type MyServer struct {
+    *service.Server
 }
 
-// Server represents the message engine
-type Server struct {
-	Clients   map[string]*Client
-	Broadcast chan Message
-	Join      chan *Client
-	Leave     chan *Client
-	History   []string
-	Mutex     sync.Mutex
-	MaxConn   int
-}
-
-// Message structure sent through Broadcast channel
-type Message struct {
-	Sender  *Client
-	Content string
-}
-
-// NewServer creates a new message engine
-func NewServer(maxConn int) *Server {
-	return &Server{
-		Clients:   make(map[string]*Client),
-		Broadcast: make(chan Message),
-		Join:      make(chan *Client),
-		Leave:     make(chan *Client),
-		History:   []string{},
-		MaxConn:   maxConn,
-	}
-}
 
 // Run starts the message engine loop
-func (s *Server) Run() {
+func (s *MyServer) broadcasts() {
 	for {
 		select {
 
-		// New client joining
-		case client := <-s.Join:
-			if len(s.Clients) >= s.MaxConn {
-				client.Messages <- "Server is full. Connection rejected."
-				close(client.Messages)
-				continue
-			}
+			// New client joining
+			case client := <-s.Join:
+				
+				for _, msg := range s.History {
+					client.Messages <- msg
+				}
 
-			s.Clients[client.Name] = client
+				// Broadcast join message
+				joinMsg := formatSystemMessage(fmt.Sprintf("%s has joined our chat.", client.Name))
+				s.addToHistory(joinMsg)
+				s.broadcastToOthers(joinMsg, client)
 
-			// Send chat history to new client
-			for _, msg := range s.History {
-				client.Messages <- msg
-			}
+			// Client leaving
+			case client := <-s.Leave:
+				// remember to add mutex.
+				// the Clients map uses net.Conn keys, so we can't index it by
+				// name; search for the corresponding entry instead and remove it.
+				var connKey net.Conn
+				for conn, c := range s.Clients {
+					if c.Name == client.Name {
+						connKey = conn
+						break
+					}
+				}
+				if connKey != nil {
+					delete(s.Clients, connKey)
+					close(client.Messages)
 
-			// Broadcast join message
-			joinMsg := formatSystemMessage(fmt.Sprintf("%s has joined our chat.", client.Name))
-			s.addToHistory(joinMsg)
-			s.broadcastToOthers(joinMsg, client)
+					leaveMsg := formatSystemMessage(fmt.Sprintf("%s has left our chat.", client.Name))
+					s.addToHistory(leaveMsg)
+					s.broadcastToOthers(leaveMsg, client)
+				}
 
-		// Client leaving
-		case client := <-s.Leave:
-			if _, exists := s.Clients[client.Name]; exists {
-				delete(s.Clients, client.Name)
-				close(client.Messages)
+			// Incoming chat message
+			case msg := <-s.Broadcast:
+				// broadcast channel carries a plain string; trim it and ignore
+				// empty payloads. sender information is not available, so pass
+				// nil to broadcastToOthers.
+				content := strings.TrimSpace(msg)
 
-				leaveMsg := formatSystemMessage(fmt.Sprintf("%s has left our chat.", client.Name))
-				s.addToHistory(leaveMsg)
-				s.broadcastToOthers(leaveMsg, client)
-			}
+			
+				formatted := formatUserMessage("", content)
+				s.addToHistory(formatted)
 
-		// Incoming chat message
-		case msg := <-s.Broadcast:
-			content := strings.TrimSpace(msg.Content)
-
-			// Do not broadcast empty messages
-			if content == "" {
-				continue
-			}
-
-			formatted := formatUserMessage(msg.Sender.Name, content)
-			s.addToHistory(formatted)
-
-			// Broadcast to everyone except sender
-			s.broadcastToOthers(formatted, msg.Sender)
+				// Broadcast to everyone; no sender to exclude.
+				s.broadcastToOthers(formatted, nil)
 		}
 	}
 }
 
 // Broadcast to all clients except the sender
-func (s *Server) broadcastToOthers(message string, sender *Client) {
+func (s *MyServer) broadcastToOthers(message string, sender *service.Client) {
 	for _, client := range s.Clients {
 		if sender != nil && client.Name == sender.Name {
 			continue
@@ -109,7 +79,7 @@ func (s *Server) broadcastToOthers(message string, sender *Client) {
 }
 
 // Safely add message to history
-func (s *Server) addToHistory(message string) {
+func (s *MyServer) addToHistory(message string) {
 	s.Mutex.Lock()
 	s.History = append(s.History, message)
 	s.Mutex.Unlock()
