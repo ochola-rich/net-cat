@@ -1,8 +1,8 @@
+// Package internal contains the server implementation for the net-cat application.
 package internal
 
 import (
 	"fmt"
-	"net"
 	"net-cat/service"
 	"strings"
 	"time"
@@ -32,24 +32,12 @@ func (s *MyServer) broadcasts() {
 
 			// Client leaving
 			case client := <-s.Leave:
-				// remember to add mutex.
-				// the Clients map uses net.Conn keys, so we can't index it by
-				// name; search for the corresponding entry instead and remove it.
-				var connKey net.Conn
-				for conn, c := range s.Clients {
-					if c.Name == client.Name {
-						connKey = conn
-						break
-					}
-				}
-				if connKey != nil {
-					delete(s.Clients, connKey)
-					close(client.Messages)
+			
+				close(client.Messages)
 
-					leaveMsg := formatSystemMessage(fmt.Sprintf("%s has left our chat.", client.Name))
-					s.addToHistory(leaveMsg)
-					s.broadcastToOthers(leaveMsg, client)
-				}
+				leaveMsg := formatSystemMessage(fmt.Sprintf("%s has left our chat.", client.Name))
+				s.addToHistory(leaveMsg)
+				s.broadcastToOthers(leaveMsg, client)
 
 			// Incoming chat message
 			case msg := <-s.Broadcast:
