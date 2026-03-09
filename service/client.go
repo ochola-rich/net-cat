@@ -2,25 +2,34 @@ package service
 
 import (
 	"bufio"
-	// "net"
+	"strings"
 )
 
-func (c *Client)WriteOutput(){
-	for msg := range c.Messages{
-		c.Conn.Write([]byte(msg))
+func (c *Client) WriteOutput() {
+	for msg := range c.Messages {
+		c.Conn.Write([]byte(msg + "\n"))
 	}
 }
 
-func (c *Client)ReadeInput(s *Server){
- scanner := bufio.NewScanner(c.Conn)
- for scanner.Scan(){
-	msg := scanner.Text()
-	if msg == ""{
-		continue
+func (c *Client) ReadInput(s *Server) {
+	scanner := bufio.NewScanner(c.Conn)
+	
+	for scanner.Scan() {
+		msg := scanner.Text()
+		msg = strings.TrimSpace(msg)
+
+		if msg == "" {
+			continue
+		}
+
+		cmsg := Message{Sender: c, Content: msg}
+		s.Broadcast <- cmsg
 	}
-	s.Broadcast <- msg
- }
- s.Leave <- c
+
+	s.Leave <- c
+	s.Mutex.Lock()
+	delete(s.Clients, c.Name)
+	s.Mutex.Unlock()
 }
 
 // func NewServer() *Server {

@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"net-cat/server"
+	"os"
 )
 
 func main() {

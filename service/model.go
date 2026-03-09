@@ -8,16 +8,21 @@ import (
 const DefaultPort = "8989"
 
 type Client struct {
-	Conn net.Conn
-	Name string
+	Conn     net.Conn
+	Name     string
 	Messages chan string
 }
 
 type Server struct {
-	Clients map[net.Conn]*Client
-	Broadcast chan string
+	Clients   map[string]*Client
+	Broadcast chan Message
 	Join      chan *Client
 	Leave     chan *Client
-	History []string
-	Mutex sync.Mutex
+	History   []string
+	Mutex     sync.Mutex
+}
+
+type Message struct {
+	Sender  *Client
+	Content string
 }

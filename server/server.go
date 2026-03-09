@@ -1,14 +1,14 @@
 package server
 
 import (
-	"bufio"
+	_ "bufio"
 	"fmt"
-	"io"
+	_ "io"
 	"log"
 	"net"
+	"net-cat/cmd"
 	"net-cat/service"
-	"strings"
-	"sync"
+	_ "strings"
 )
 
 const maxClients = 10
@@ -28,11 +28,7 @@ func Start(port string) error {
 
 	fmt.Println("Listening on the port :" + port)
 
-	server := &service.Server{
-		// Active clients keyed by connection object.
-		Clients: make(map[net.Conn]*service.Client),
-		Mutex:  sync.Mutex{},
-	}
+	server := service.NewServer(maxClients)
 
 	for {
 		conn, err := listener.Accept()
@@ -43,6 +39,7 @@ func Start(port string) error {
 
 		// Each client gets its own goroutine so connections are concurrent.
 		go handleConnection(server, conn)
+		go server.Run()
 	}
 }
 
@@ -58,97 +55,5 @@ func handleConnection(s *service.Server, conn net.Conn) {
 	}
 	s.Mutex.Unlock()
 
-	sendWelcome(conn)
-
-	name, err := askName(conn)
-	if err != nil {
-		conn.Close()
-		return
-	}
-
-	client := &service.Client{
-		Conn: conn,
-		Name: name,
-	}
-
-	// Register now; always remove on any later return path.
-	registerClient(s, client)
-	defer removeClient(s, client)
-
-	log.Printf("Client connected: %s\n", client.Name)
-
-	// Keep connection alive by reading until the peer disconnects.
-	buffer := make([]byte, 1)
-	for {
-		_, err := conn.Read(buffer)
-		if err != nil {
-			if err == io.EOF {
-				log.Printf("Client disconnected: %s\n", client.Name)
-			} else {
-				log.Printf("Read error from %s: %v\n", client.Name, err)
-			}
-			return
-		}
-	}
-}
-
-// registerClient stores a connected client in shared state.
-func registerClient(s *service.Server, client *service.Client) {
-	s.Mutex.Lock()
-	defer s.Mutex.Unlock()
-	s.Clients[client.Conn] = client
-}
-
-// removeClient deletes a client from shared state and closes its socket.
-func removeClient(s *service.Server, client *service.Client) {
-	s.Mutex.Lock()
-	defer s.Mutex.Unlock()
-
-	delete(s.Clients, client.Conn)
-	client.Conn.Close()
-}
-
-// sendWelcome writes the banner and prompts the user for their name.
-func sendWelcome(conn net.Conn) {
-	welcome := "Welcome to TCP-Chat!\n" +
-		"         _nnnn_\n" +
-		"        dGGGGMMb\n" +
-		"       @p~qp~~qMb\n" +
-		"       M|@||@) M|\n" +
-		"       @,----.JM|\n" +
-		"      JS^\\__/  qKL\n" +
-		"     dZP        qKRb\n" +
-		"    dZP          qKKb\n" +
-		"   fZP            SMMb\n" +
-		"   HZM            MMMM\n" +
-		"   FqM            MMMM\n" +
-		" __| \".        |\\dS\"qML\n" +
-		" |    `.       | ` \\Zq\n" +
-		"_)      \\.___.,|     .'\n" +
-		"\\____   )MMMMMP|   .'\n" +
-		"     `-'       `--'\n" +
-		"[ENTER YOUR NAME]: "
-
-	conn.Write([]byte(welcome))
-}
-
-// askName reads newline-terminated input and rejects empty names.
-func askName(conn net.Conn) (string, error) {
-	reader := bufio.NewReader(conn)
-
-	for {
-		name, err := reader.ReadString('\n')
-		if err != nil {
-			return "", err
-		}
-
-		name = strings.TrimSpace(name)
-
-		if name == "" {
-			conn.Write([]byte("Name cannot be empty. Try again: "))
-			continue
-		}
-
-		return name, nil
-	}
+	go cmd.HandleClient(conn, s)
 }

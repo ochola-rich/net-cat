@@ -1,5 +1,9 @@
+<<<<<<< HEAD:internal/broadcast.go
 // Package internal contains the server implementation for the net-cat application.
 package internal
+=======
+package service
+>>>>>>> origin/main:service/broadcast.go
 
 import (
 	"fmt"
@@ -8,16 +12,31 @@ import (
 	"time"
 )
 
+<<<<<<< HEAD:internal/broadcast.go
 type MyServer struct {
     *service.Server
 }
 
+=======
+// NewServer creates a new message engine
+func NewServer(maxConn int) *Server {
+	return &Server{
+		Clients:   make(map[string]*Client),
+		Broadcast: make(chan Message),
+		Join:      make(chan *Client),
+		Leave:     make(chan *Client),
+		History:   []string{},
+		Mutex:     sync.Mutex{},
+	}
+}
+>>>>>>> origin/main:service/broadcast.go
 
 // Run starts the message engine loop
 func (s *MyServer) broadcasts() {
 	for {
 		select {
 
+<<<<<<< HEAD:internal/broadcast.go
 			// New client joining
 			case client := <-s.Join:
 				
@@ -38,6 +57,25 @@ func (s *MyServer) broadcasts() {
 				leaveMsg := formatSystemMessage(fmt.Sprintf("%s has left our chat.", client.Name))
 				s.addToHistory(leaveMsg)
 				s.broadcastToOthers(leaveMsg, client)
+=======
+		// New client joining
+		case client := <-s.Join:
+			// Send chat history to new client
+			for _, msg := range s.History {
+				client.Messages <- msg
+			}
+
+			// Broadcast join message
+			joinMsg := formatSystemMessage(fmt.Sprintf("%s has joined our chat.", client.Name))
+			s.addToHistory(joinMsg)
+			s.broadcastToOthers(joinMsg, client)
+
+		// Client leaving
+		case client := <-s.Leave:
+			leaveMsg := formatSystemMessage(fmt.Sprintf("%s has left our chat.", client.Name))
+			s.addToHistory(leaveMsg)
+			s.broadcastToOthers(leaveMsg, client)
+>>>>>>> origin/main:service/broadcast.go
 
 			// Incoming chat message
 			case msg := <-s.Broadcast:
