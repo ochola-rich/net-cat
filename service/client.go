@@ -2,7 +2,7 @@ package service
 
 import (
 	"bufio"
-	"net"
+	// "net"
 )
 
 func (c *Client)WriteOutput(){
@@ -23,11 +23,11 @@ func (c *Client)ReadeInput(s *Server){
  s.Leave <- c
 }
 
-func NewServer() *Server {
-    return &Server{
-        Clients:   make(map[net.Conn]*Client),
-        Broadcast: make(chan string, 100),
-        Join:      make(chan *Client, 100),
-        Leave:     make(chan *Client, 100),
-    }
-}
+// func NewServer() *Server {
+//     return &Server{
+//         Clients:   make(map[net.Conn]*Client),
+//         Broadcast: make(chan string, 100),
+//         Join:      make(chan *Client, 100),
+//         Leave:     make(chan *Client, 100),
+//     }
+// }
