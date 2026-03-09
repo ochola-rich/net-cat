@@ -8,7 +8,6 @@ import (
 	"net"
 	"net-cat/service"
 	"strings"
-	"sync"
 )
 
 const maxClients = 10
@@ -28,11 +27,12 @@ func Start(port string) error {
 
 	fmt.Println("Listening on the port :" + port)
 
-	server := &service.Server{
-		// Active clients keyed by connection object.
-		Clients: make(map[net.Conn]*service.Client),
-		Mutex:  sync.Mutex{},
-	}
+	server := service.NewServer() // &service.Server{
+	// 	// Active clients keyed by connection object.
+	// 	Clients: make(map[net.Conn]*service.Client),
+	// 	Mutex:  sync.Mutex{},
+	// }
+	go consumeClientLeaves(server) // starts the goroutine that checks for disconnects
 
 	for {
 		conn, err := listener.Accept()
@@ -42,7 +42,7 @@ func Start(port string) error {
 		}
 
 		// Each client gets its own goroutine so connections are concurrent.
-		go handleConnection(server, conn)
+		go handleConnection(server, conn) // 
 	}
 }
 
@@ -73,7 +73,9 @@ func handleConnection(s *service.Server, conn net.Conn) {
 
 	// Register now; always remove on any later return path.
 	registerClient(s, client)
-	defer removeClient(s, client)
+	defer func() {
+		s.Leave <- client.Name // does not remove the client directry, it instead sends his/ her name to leaves
+	}()
 
 	log.Printf("Client connected: %s\n", client.Name)
 
@@ -99,13 +101,27 @@ func registerClient(s *service.Server, client *service.Client) {
 	s.Clients[client.Conn] = client
 }
 
-// removeClient deletes a client from shared state and closes its socket.
-func removeClient(s *service.Server, client *service.Client) {
+// removeClient deletes a client by name from shared state and closes its socket.
+func removeClient(s *service.Server, clientName string) {
 	s.Mutex.Lock()
 	defer s.Mutex.Unlock()
 
-	delete(s.Clients, client.Conn)
-	client.Conn.Close()
+	for conn, client := range s.Clients {
+		if client.Name != clientName {
+			continue
+		}
+
+		delete(s.Clients, conn)
+		conn.Close()
+		return
+	}
+}
+
+// consumeClientLeaves removes clients when disconnect events are received.
+func consumeClientLeaves(s *service.Server) { // go routine that constantry checks if a client has left
+	for clientName := range s.Leave {
+		removeClient(s, clientName)
+	}
 }
 
 // sendWelcome writes the banner and prompts the user for their name.
