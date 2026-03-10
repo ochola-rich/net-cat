@@ -23,12 +23,16 @@ func NewServer(maxConn int) *Server {
 func (s *Server) Broadcasts() {
 	for {
 		select {
-		// New client joining
-		case client := <-s.Join:
-			// Send chat history to new client
-			for _, msg := range s.History {
-				client.Messages <- msg
-			}
+	// New client joining
+	case client := <-s.Join:
+		s.Mutex.Lock()
+		s.Clients[client.Name] = client
+		s.Mutex.Unlock()
+
+		// Send chat history to new client
+		for _, msg := range s.History {
+			client.Messages <- msg
+		}
 
 			// Broadcast join message
 			joinMsg := formatSystemMessage(fmt.Sprintf("%s has joined our chat.", client.Name))
@@ -42,19 +46,22 @@ func (s *Server) Broadcasts() {
 			s.broadcastToOthers(leaveMsg, client)
 
 			// Incoming chat message
-		case msg := <-s.Broadcast:
-				// broadcast channel carries a plain string; trim it and ignore
-				// empty payloads. sender information is not available, so pass
-				// nil to broadcastToOthers.
-			content := strings.TrimSpace(msg.Content)
-
-			
-			formatted := formatUserMessage(msg.Sender.Name, content)
-			s.addToHistory(formatted)
-
-				// Broadcast to everyone; no sender to exclude.
-			s.broadcastToOthers(formatted, nil)
+	case msg := <-s.Broadcast:
+		// Trim input and ignore blank messages.
+		content := strings.TrimSpace(msg.Content)
+		if content == "" {
+			continue
 		}
+		if msg.Sender == nil {
+			continue
+		}
+
+		formatted := formatUserMessage(msg.Sender.Name, content)
+		s.addToHistory(formatted)
+
+		// Broadcast to everyone except the sender.
+		s.broadcastToOthers(formatted, msg.Sender)
+	}
 	}
 }
 
