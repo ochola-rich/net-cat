@@ -1,23 +1,12 @@
-<<<<<<< HEAD:internal/broadcast.go
-// Package internal contains the server implementation for the net-cat application.
-package internal
-=======
 package service
->>>>>>> origin/main:service/broadcast.go
 
 import (
 	"fmt"
-	"net-cat/service"
 	"strings"
 	"time"
+	"sync"
 )
 
-<<<<<<< HEAD:internal/broadcast.go
-type MyServer struct {
-    *service.Server
-}
-
-=======
 // NewServer creates a new message engine
 func NewServer(maxConn int) *Server {
 	return &Server{
@@ -29,35 +18,11 @@ func NewServer(maxConn int) *Server {
 		Mutex:     sync.Mutex{},
 	}
 }
->>>>>>> origin/main:service/broadcast.go
 
 // Run starts the message engine loop
-func (s *MyServer) broadcasts() {
+func (s *Server) Broadcasts() {
 	for {
 		select {
-
-<<<<<<< HEAD:internal/broadcast.go
-			// New client joining
-			case client := <-s.Join:
-				
-				for _, msg := range s.History {
-					client.Messages <- msg
-				}
-
-				// Broadcast join message
-				joinMsg := formatSystemMessage(fmt.Sprintf("%s has joined our chat.", client.Name))
-				s.addToHistory(joinMsg)
-				s.broadcastToOthers(joinMsg, client)
-
-			// Client leaving
-			case client := <-s.Leave:
-			
-				close(client.Messages)
-
-				leaveMsg := formatSystemMessage(fmt.Sprintf("%s has left our chat.", client.Name))
-				s.addToHistory(leaveMsg)
-				s.broadcastToOthers(leaveMsg, client)
-=======
 		// New client joining
 		case client := <-s.Join:
 			// Send chat history to new client
@@ -75,27 +40,26 @@ func (s *MyServer) broadcasts() {
 			leaveMsg := formatSystemMessage(fmt.Sprintf("%s has left our chat.", client.Name))
 			s.addToHistory(leaveMsg)
 			s.broadcastToOthers(leaveMsg, client)
->>>>>>> origin/main:service/broadcast.go
 
 			// Incoming chat message
-			case msg := <-s.Broadcast:
+		case msg := <-s.Broadcast:
 				// broadcast channel carries a plain string; trim it and ignore
 				// empty payloads. sender information is not available, so pass
 				// nil to broadcastToOthers.
-				content := strings.TrimSpace(msg)
+			content := strings.TrimSpace(msg.Content)
 
 			
-				formatted := formatUserMessage("", content)
-				s.addToHistory(formatted)
+			formatted := formatUserMessage(msg.Sender.Name, content)
+			s.addToHistory(formatted)
 
 				// Broadcast to everyone; no sender to exclude.
-				s.broadcastToOthers(formatted, nil)
+			s.broadcastToOthers(formatted, nil)
 		}
 	}
 }
 
 // Broadcast to all clients except the sender
-func (s *MyServer) broadcastToOthers(message string, sender *service.Client) {
+func (s *Server) broadcastToOthers(message string, sender *Client) {
 	for _, client := range s.Clients {
 		if sender != nil && client.Name == sender.Name {
 			continue
@@ -105,7 +69,7 @@ func (s *MyServer) broadcastToOthers(message string, sender *service.Client) {
 }
 
 // Safely add message to history
-func (s *MyServer) addToHistory(message string) {
+func (s *Server) addToHistory(message string) {
 	s.Mutex.Lock()
 	s.History = append(s.History, message)
 	s.Mutex.Unlock()

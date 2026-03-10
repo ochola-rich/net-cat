@@ -56,7 +56,7 @@ func TestRunJoinSendsHistoryAndBroadcastsSystemMessage(t *testing.T) {
 	joining := &Client{Name: "alice", Messages: make(chan string, 4)}
 	s.Clients[existing.Name] = existing
 
-	go s.Run()
+	go s.Broadcasts()
 	s.Join <- joining
 
 	for i, want := range []string{"old-1", "old-2"} {
@@ -95,7 +95,7 @@ func TestRunLeaveBroadcastsSystemMessageAndAddsHistory(t *testing.T) {
 	s.Clients[leaving.Name] = leaving
 	s.Clients[other.Name] = other
 
-	go s.Run()
+	go s.Broadcasts()
 	s.Leave <- leaving
 
 	select {
@@ -119,7 +119,7 @@ func TestRunBroadcastIgnoresEmptyAndFormatsValidMessages(t *testing.T) {
 	s.Clients[sender.Name] = sender
 	s.Clients[receiver.Name] = receiver
 
-	go s.Run()
+	go s.Broadcasts()
 	s.Broadcast <- Message{Sender: sender, Content: "   "}
 
 	select {

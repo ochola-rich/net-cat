@@ -39,7 +39,7 @@ func Start(port string) error {
 
 		// Each client gets its own goroutine so connections are concurrent.
 		go handleConnection(server, conn)
-		go server.Run()
+		go server.Broadcasts()
 	}
 }
 
