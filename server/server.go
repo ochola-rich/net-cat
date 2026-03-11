@@ -39,21 +39,21 @@ func Start(port string) error {
 
 		// Each client gets its own goroutine so connections are concurrent.
 		go handleConnection(server, conn)
-		go server.Broadcasts()
 	}
 }
 
 // handleConnection manages one client from connect to disconnect.
 func handleConnection(s *service.Server, conn net.Conn) {
 	// Enforce max clients (best-effort under concurrent connects).
-	s.Mutex.Lock()
-	if len(s.Clients) >= maxClients {
-		s.Mutex.Unlock()
+	limit := s.MaxConn
+	if limit == 0 {
+		limit = maxClients
+	}
+	if s.TotalClients() >= limit {
 		conn.Write([]byte("Server full. Maximum 10 clients allowed.\n"))
 		conn.Close()
 		return
 	}
-	s.Mutex.Unlock()
 
 	go cmd.HandleClient(conn, s)
 }

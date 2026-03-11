@@ -4,70 +4,109 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"sync"
 )
 
 // NewServer creates a new message engine
 func NewServer(maxConn int) *Server {
-	return &Server{
+	s := &Server{
+		Groups:  make(map[string]*Group),
+		MaxConn: maxConn,
+	}
+	s.GetOrCreateGroup("lobby")
+	return s
+}
+
+func (s *Server) GetOrCreateGroup(name string) *Group {
+	s.Mutex.Lock()
+	if group, ok := s.Groups[name]; ok {
+		s.Mutex.Unlock()
+		return group
+	}
+	group := &Group{
+		Name:      name,
 		Clients:   make(map[string]*Client),
 		Broadcast: make(chan Message),
 		Join:      make(chan *Client),
 		Leave:     make(chan *Client),
 		History:   []string{},
-		Mutex:     sync.Mutex{},
 	}
+	s.Groups[name] = group
+	s.Mutex.Unlock()
+
+	go group.Broadcasts()
+	return group
 }
 
-// Run starts the message engine loop
-func (s *Server) Broadcasts() {
+func (s *Server) TotalClients() int {
+	s.Mutex.Lock()
+	groups := make([]*Group, 0, len(s.Groups))
+	for _, group := range s.Groups {
+		groups = append(groups, group)
+	}
+	s.Mutex.Unlock()
+
+	total := 0
+	for _, group := range groups {
+		group.Mutex.Lock()
+		total += len(group.Clients)
+		group.Mutex.Unlock()
+	}
+	return total
+}
+
+// Run starts the group message loop
+func (g *Group) Broadcasts() {
 	for {
 		select {
-	// New client joining
-	case client := <-s.Join:
-		s.Mutex.Lock()
-		s.Clients[client.Name] = client
-		s.Mutex.Unlock()
+		// New client joining
+		case client := <-g.Join:
+			g.Mutex.Lock()
+			g.Clients[client.Name] = client
+			g.Mutex.Unlock()
 
-		// Send chat history to new client
-		for _, msg := range s.History {
-			client.Messages <- msg
-		}
+			// Send chat history to new client
+			for _, msg := range g.History {
+				client.Messages <- msg
+			}
 
 			// Broadcast join message
 			joinMsg := formatSystemMessage(fmt.Sprintf("%s has joined our chat.", client.Name))
-			s.addToHistory(joinMsg)
-			s.broadcastToOthers(joinMsg, client)
+			g.addToHistory(joinMsg)
+			g.broadcastToOthers(joinMsg, client)
 
 		// Client leaving
-		case client := <-s.Leave:
+		case client := <-g.Leave:
+			g.Mutex.Lock()
+			delete(g.Clients, client.Name)
+			g.Mutex.Unlock()
+
 			leaveMsg := formatSystemMessage(fmt.Sprintf("%s has left our chat.", client.Name))
-			s.addToHistory(leaveMsg)
-			s.broadcastToOthers(leaveMsg, client)
+			g.addToHistory(leaveMsg)
+			g.broadcastToOthers(leaveMsg, client)
 
 			// Incoming chat message
-	case msg := <-s.Broadcast:
-		// Trim input and ignore blank messages.
-		content := strings.TrimSpace(msg.Content)
-		if content == "" {
-			continue
-		}
-		if msg.Sender == nil {
-			continue
-		}
+		case msg := <-g.Broadcast:
+			// Trim input and ignore blank messages.
+			content := strings.TrimSpace(msg.Content)
+			if content == "" {
+				continue
+			}
+			if msg.Sender == nil {
+				continue
+			}
 
-		formatted := formatUserMessage(msg.Sender.Name, content)
-		s.addToHistory(formatted)
+			formatted := formatUserMessage(msg.Sender.Name, content)
+			g.addToHistory(formatted)
 
-		// Broadcast to everyone except the sender.
-		s.broadcastToOthers(formatted, msg.Sender)
-	}
+			// Broadcast to everyone except the sender.
+			g.broadcastToOthers(formatted, msg.Sender)
+		}
 	}
 }
 
 // Broadcast to all clients except the sender
-func (s *Server) broadcastToOthers(message string, sender *Client) {
-	for _, client := range s.Clients {
+func (g *Group) broadcastToOthers(message string, sender *Client) {
+	for _, client := range g.Clients {
 		if sender != nil && client.Name == sender.Name {
 			continue
 		}
@@ -76,10 +115,10 @@ func (s *Server) broadcastToOthers(message string, sender *Client) {
 }
 
 // Safely add message to history
-func (s *Server) addToHistory(message string) {
-	s.Mutex.Lock()
-	s.History = append(s.History, message)
-	s.Mutex.Unlock()
+func (g *Group) addToHistory(message string) {
+	g.Mutex.Lock()
+	g.History = append(g.History, message)
+	g.Mutex.Unlock()
 }
 
 // Format user message

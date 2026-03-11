@@ -14,7 +14,7 @@ func (c *Client) WriteOutput() {
 
 func (c *Client) ReadInput(s *Server) {
 	scanner := bufio.NewScanner(c.Conn)
-	
+
 	for scanner.Scan() {
 		msg := scanner.Text()
 		msg = strings.TrimSpace(msg)
@@ -23,7 +23,43 @@ func (c *Client) ReadInput(s *Server) {
 			continue
 		}
 
+		if c.Group == nil {
+			c.Group = s.GetOrCreateGroup("lobby")
+		}
+
 		const changeCmd = "--change-name"
+		const joinCmd = "--join"
+		if len(msg) >= len(joinCmd) && strings.EqualFold(msg[:len(joinCmd)], joinCmd) {
+			groupName := strings.TrimSpace(msg[len(joinCmd):])
+			if groupName == "" {
+				c.Messages <- "Usage: --join <group>"
+				continue
+			}
+
+			if strings.EqualFold(c.Group.Name, groupName) {
+				c.Messages <- "You are already in that group."
+				continue
+			}
+
+			newGroup := s.GetOrCreateGroup(groupName)
+			newGroup.Mutex.Lock()
+			if _, exists := newGroup.Clients[c.Name]; exists {
+				newGroup.Mutex.Unlock()
+				c.Messages <- "Name already taken in that group."
+				continue
+			}
+			newGroup.Mutex.Unlock()
+
+			oldGroup := c.Group
+			if oldGroup != nil {
+				oldGroup.Leave <- c
+			}
+			c.Group = newGroup
+			newGroup.Join <- c
+			c.Messages <- fmt.Sprintf("Joined group %s.", newGroup.Name)
+			continue
+		}
+
 		if len(msg) >= len(changeCmd) && strings.EqualFold(msg[:len(changeCmd)], changeCmd) {
 			newName := strings.TrimSpace(msg[len(changeCmd):])
 			if newName == "" {
@@ -31,34 +67,34 @@ func (c *Client) ReadInput(s *Server) {
 				continue
 			}
 
-			s.Mutex.Lock()
-			if _, exists := s.Clients[newName]; exists {
-				s.Mutex.Unlock()
+			group := c.Group
+			group.Mutex.Lock()
+			if _, exists := group.Clients[newName]; exists {
+				group.Mutex.Unlock()
 				c.Messages <- "Name already taken. Choose a different name."
 				continue
 			}
 
 			oldName := c.Name
-			delete(s.Clients, oldName)
-			s.Clients[newName] = c
+			delete(group.Clients, oldName)
+			group.Clients[newName] = c
 			c.Name = newName
-			s.Mutex.Unlock()
+			group.Mutex.Unlock()
 
 			systemMsg := formatSystemMessage(fmt.Sprintf("%s changed name to %s.", oldName, newName))
-			s.addToHistory(systemMsg)
-			s.broadcastToOthers(systemMsg, c)
+			group.addToHistory(systemMsg)
+			group.broadcastToOthers(systemMsg, c)
 			c.Messages <- "Name updated."
 			continue
 		}
 
 		cmsg := Message{Sender: c, Content: msg}
-		s.Broadcast <- cmsg
+		c.Group.Broadcast <- cmsg
 	}
 
-	s.Leave <- c
-	s.Mutex.Lock()
-	delete(s.Clients, c.Name)
-	s.Mutex.Unlock()
+	if c.Group != nil {
+		c.Group.Leave <- c
+	}
 }
 
 // func NewServer() *Server {

@@ -10,13 +10,8 @@ import (
 )
 
 func TestHandleClientSendsBannerAndEnqueuesClient(t *testing.T) {
-	server := &service.Server{
-		Clients:   make(map[string]*service.Client),
-		Broadcast: make(chan service.Message, 4),
-		Join:      make(chan *service.Client),
-		Leave:     make(chan *service.Client, 4),
-		History:   []string{},
-	}
+	server := service.NewServer(10)
+	group := server.GetOrCreateGroup("lobby")
 
 	clientConn, peerConn := net.Pipe()
 	defer peerConn.Close()
@@ -33,12 +28,15 @@ func TestHandleClientSendsBannerAndEnqueuesClient(t *testing.T) {
 
 	_, _ = peerConn.Write([]byte("alice\n"))
 
-	select {
-	case joined := <-server.Join:
-		if joined.Name != "alice" {
-			t.Fatalf("expected queued client name alice, got %q", joined.Name)
+	deadline := time.Now().Add(1 * time.Second)
+	for time.Now().Before(deadline) {
+		group.Mutex.Lock()
+		_, ok := group.Clients["alice"]
+		group.Mutex.Unlock()
+		if ok {
+			return
 		}
-	case <-time.After(1 * time.Second):
-		t.Fatal("client was not queued on Join channel")
+		time.Sleep(10 * time.Millisecond)
 	}
+	t.Fatal("client was not added to lobby group")
 }

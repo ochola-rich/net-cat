@@ -46,11 +46,9 @@ func TestReadInputPublishesMessagesAndLeavesOnDisconnect(t *testing.T) {
 	clientConn, peerConn := net.Pipe()
 	defer peerConn.Close()
 
-	s := &Server{
-		Broadcast: make(chan Message, 2),
-		Leave:     make(chan *Client, 1),
-	}
-	c := &Client{Conn: clientConn, Name: "alice"}
+	s := NewServer(10)
+	group := s.GetOrCreateGroup("lobby")
+	c := &Client{Conn: clientConn, Name: "alice", Group: group}
 
 	done := make(chan struct{})
 	go func() {
@@ -62,7 +60,7 @@ func TestReadInputPublishesMessagesAndLeavesOnDisconnect(t *testing.T) {
 	peerConn.Close()
 
 	select {
-	case msg := <-s.Broadcast:
+	case msg := <-group.Broadcast:
 		if msg.Sender != c {
 			t.Fatal("broadcast sender mismatch")
 		}
@@ -74,13 +72,13 @@ func TestReadInputPublishesMessagesAndLeavesOnDisconnect(t *testing.T) {
 	}
 
 	select {
-	case <-s.Broadcast:
+	case <-group.Broadcast:
 		t.Fatal("blank line should not produce a broadcast message")
 	default:
 	}
 
 	select {
-	case left := <-s.Leave:
+	case left := <-group.Leave:
 		if left != c {
 			t.Fatal("leave event client mismatch")
 		}

@@ -17,24 +17,33 @@ func HandleClient(c net.Conn, s *service.Server) {
 	reader := bufio.NewReader(c)
 
 	name, _ := reader.ReadString('\n')
-	name = strings.Trim(name, "\n")
+	name = strings.TrimSpace(name)
 
-	if strings.TrimSpace(name) == "" {
-		c.Write([]byte("Invalid input, use a valid name"))
+	if name == "" {
+		c.Write([]byte("Invalid input, use a valid name\n"))
+		c.Close()
+		return
 	}
 
+	group := s.GetOrCreateGroup("lobby")
+	group.Mutex.Lock()
+	if _, exists := group.Clients[name]; exists {
+		group.Mutex.Unlock()
+		c.Write([]byte("Name already taken in this group.\n"))
+		c.Close()
+		return
+	}
+	group.Mutex.Unlock()
+
 	client.Name = name
-	s.Join <- client
+	client.Group = group
+	group.Join <- client
 
-	log.Printf("Client connected: %s\n", client.Name)
-
-	s.Mutex.Lock()
-	s.Clients[name] = client
-	s.Mutex.Unlock()
+	log.Printf("Client connected: %s (group: %s)\n", client.Name, group.Name)
 
 	go client.ReadInput(s)
 	go client.WriteOutput()
 
-	fmt.Printf("total clients: %d\n", len(s.Clients))
+	fmt.Printf("total clients: %d\n", s.TotalClients())
 
 }

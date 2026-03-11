@@ -11,9 +11,17 @@ type Client struct {
 	Conn     net.Conn
 	Name     string
 	Messages chan string
+	Group    *Group
 }
 
 type Server struct {
+	Groups  map[string]*Group
+	MaxConn int
+	Mutex   sync.Mutex
+}
+
+type Group struct {
+	Name      string
 	Clients   map[string]*Client
 	Broadcast chan Message
 	Join      chan *Client
