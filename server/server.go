@@ -3,21 +3,41 @@ package server
 import (
 	_ "bufio"
 	"fmt"
-	_ "io"
+	"io"
 	"log"
 	"net"
 	"net-cat/cmd"
 	"net-cat/service"
+	"os"
 	_ "strings"
 )
 
 const maxClients = 10
 
+type Options struct {
+	InfoWriter  io.Writer
+	ErrorLogger *log.Logger
+}
+
 // Start initializes the TCP listener and accepts clients forever.
 func Start(port string) error {
+	return StartWithOptions(port, Options{})
+}
+
+// StartWithOptions initializes the TCP listener with configurable output.
+func StartWithOptions(port string, opts Options) error {
 	// If no CLI port is provided, use the shared model default.
 	if port == "" {
 		port = service.DefaultPort
+	}
+
+	infoWriter := opts.InfoWriter
+	if infoWriter == nil {
+		infoWriter = os.Stdout
+	}
+	errorLogger := opts.ErrorLogger
+	if errorLogger == nil {
+		errorLogger = log.Default()
 	}
 
 	listener, err := net.Listen("tcp", ":"+port)
@@ -26,14 +46,14 @@ func Start(port string) error {
 	}
 	defer listener.Close()
 
-	fmt.Println("Listening on the port :" + port)
+	fmt.Fprintln(infoWriter, "Listening on the port :"+port)
 
 	server := service.NewServer(maxClients)
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Println("Error accepting connection:", err)
+			errorLogger.Println("Error accepting connection:", err)
 			continue
 		}
 
