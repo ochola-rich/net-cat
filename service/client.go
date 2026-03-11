@@ -2,6 +2,7 @@ package service
 
 import (
 	"bufio"
+	"fmt"
 	"strings"
 )
 
@@ -19,6 +20,34 @@ func (c *Client) ReadInput(s *Server) {
 		msg = strings.TrimSpace(msg)
 
 		if msg == "" {
+			continue
+		}
+
+		const changeCmd = "--change-name"
+		if len(msg) >= len(changeCmd) && strings.EqualFold(msg[:len(changeCmd)], changeCmd) {
+			newName := strings.TrimSpace(msg[len(changeCmd):])
+			if newName == "" {
+				c.Messages <- "Usage: --change-name <name>"
+				continue
+			}
+
+			s.Mutex.Lock()
+			if _, exists := s.Clients[newName]; exists {
+				s.Mutex.Unlock()
+				c.Messages <- "Name already taken. Choose a different name."
+				continue
+			}
+
+			oldName := c.Name
+			delete(s.Clients, oldName)
+			s.Clients[newName] = c
+			c.Name = newName
+			s.Mutex.Unlock()
+
+			systemMsg := formatSystemMessage(fmt.Sprintf("%s changed name to %s.", oldName, newName))
+			s.addToHistory(systemMsg)
+			s.broadcastToOthers(systemMsg, c)
+			c.Messages <- "Name updated."
 			continue
 		}
 
