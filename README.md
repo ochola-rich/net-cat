@@ -1,7 +1,7 @@
 # TCP-Chat (net-cat)
 
 **Description**
-This project is a simple TCP chat server written in Go. It lets multiple people connect with a TCP client (for example `nc`, `telnet`, or the included TUI client) and chat in real time. Each message is timestamped, and new users receive the recent chat history when they join.
+This project is a simple TCP chat server written in Go. It lets multiple people connect with a TCP client (for example `nc`, `telnet`,  and chat in real time. Each message is timestamped, and new users receive the recent chat history when they join.
 
 The main program (`main.go`) starts the server and waits for incoming connections. Each connected user chooses a name, then can send messages to everyone else. The server keeps all state in memory.
 
@@ -16,6 +16,7 @@ The main program (`main.go`) starts the server and waits for incoming connection
 - Includes an optional terminal UI (TUI) client.
 - Tests cover the main behaviors.
 - Clear join, message, and leave flow (explained below).
+- Group chat selection and name‑change commands are **not** implemented yet (see the extension section).
 
 **Requirements**
 - Go `1.24.3` or newer (as listed in `go.mod`).
@@ -101,6 +102,19 @@ Alice receives:
 ```
 
 Note: the server does **not** echo your own message back to you. If you use `nc` or `telnet`, you will not see your own line after pressing Enter. The TUI client prints your own messages locally so you can see them.
+
+**Planned Client Commands (Not Implemented Yet)**
+These commands are **not** available in the current code. They are listed here because you asked to document them. If you want them to work, you will need to implement them in the client and server.
+
+Join another group chat:
+```bash
+--join <name of the group>
+```
+
+Change your name:
+```bash
+--change -name <new name>
+```
 
 **How the Program Works (Step by Step)**
 
@@ -215,6 +229,8 @@ Here are common changes you can make:
 - Show your own messages on the server side: change `broadcastToOthers` to also send to the sender.
 - Save chat history to disk: update `addToHistory` and load history on startup.
 - Add commands (like `/nick` or `/list`): parse messages in `ReadInput` before broadcasting.
+- Add group chats and `--join <group>`: add a group concept to `Server`, track group membership, and route broadcasts by group.
+- Add `--change -name <new name>`: implement a rename command that updates `Client.Name` and the `Clients` map safely.
 - Add TLS for secure connections: replace `net.Listen` and `net.Dial` with the TLS versions in `crypto/tls`.
 
 **Running Tests**
